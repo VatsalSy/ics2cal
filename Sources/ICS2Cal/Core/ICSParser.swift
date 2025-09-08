@@ -90,18 +90,25 @@ final class ICSParser {
     }
 
     func unfoldLines(_ content: String) -> [String] {
+        // Normalize line endings to \n and implement RFC5545 line unfolding
+        let normalized = content
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+
         var lines: [String] = []
-        var current = ""
-        for raw in content.split(whereSeparator: \n\r.contains, omittingEmptySubsequences: false) {
+        var current: String? = nil
+        for raw in normalized.split(separator: "\n", omittingEmptySubsequences: false) {
             let s = String(raw)
             if s.hasPrefix(" ") || s.hasPrefix("\t") {
-                current += s.trimmingCharacters(in: .whitespaces)
+                // Continuation line: append without leading whitespace
+                let cont = s.trimmingCharacters(in: .whitespaces)
+                if current != nil { current! += cont } else { current = cont }
             } else {
-                if !current.isEmpty { lines.append(current) }
+                if let cur = current { lines.append(cur) }
                 current = s
             }
         }
-        if !current.isEmpty { lines.append(current) }
+        if let cur = current { lines.append(cur) }
         return lines.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
     }
 
@@ -126,4 +133,3 @@ final class ICSParser {
         return (name, params, value)
     }
 }
-

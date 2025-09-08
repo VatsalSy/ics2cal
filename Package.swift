@@ -17,10 +17,9 @@ let package = Package(
         ),
         .testTarget(
             name: "ICS2CalTests",
-            path: "Tests/ICS2CalTests",
             dependencies: ["ICS2Cal"],
+            path: "Tests/ICS2CalTests",
             resources: [.process("Fixtures")]
         )
     ]
 )
-

@@ -1,0 +1,65 @@
+name: Bug report
+description: Report a problem, regression, or unexpected behavior
+labels: [bug]
+body:
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre‑submission checks
+      options:
+        - label: I’ve searched open/closed issues for duplicates.
+          required: true
+        - label: I’m using the latest commit or release.
+          required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: A clear, concise description of the problem.
+      placeholder: What happened? What did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Exact commands and inputs that reproduce the issue.
+      placeholder: |
+        1. Command run (include all flags)
+        2. ICS input (attach sanitized snippet or fixture)
+        3. Observed output/logs
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior and logs
+      description: Include any console output with `--help`/`dry-run` context as needed.
+      render: shell
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      placeholder: macOS 14.5, Swift 5.9, Apple Calendar
+  - type: textarea
+    id: fixtures
+    attributes:
+      label: Sample ICS (sanitized)
+      description: Redact sensitive data; include only minimal repro.
+      render: text
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      options:
+        - Low (minor inconvenience)
+        - Medium (workaround exists)
+        - High (blocks usage)
+        - Critical (data loss or corruption)
+

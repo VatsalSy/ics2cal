@@ -1,0 +1,9 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security Policy
+    url: https://github.com/VatsalSy/ics2cal/security/policy
+    about: Please review the security policy for responsible disclosure and preferred contact.
+  - name: Documentation
+    url: https://github.com/VatsalSy/ics2cal
+    about: See README and DETAILS for usage and design notes.
+

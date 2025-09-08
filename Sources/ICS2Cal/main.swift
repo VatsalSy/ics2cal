@@ -49,7 +49,7 @@ struct CLI {
 
     private static var usageText: String {
         """
-        ics2cal — Sync ICS files to Apple Calendar (no external deps)
+        ics2cal — Sync ICS files to Apple Calendar
 
         Usage:
           ics2cal info <ics-file> [--format summary|detailed|json]
@@ -149,7 +149,7 @@ struct CLI {
             return
         }
 
-        var plan = SyncPlanner.plan(events: events, source: source, mirror: mirror, adopt: adopt, timeWindowMin: timeWindowMin, addOnly: addOnly, store: store, calendar: target, from: from, to: to)
+        let plan = SyncPlanner.plan(events: events, source: source, mirror: mirror, adopt: adopt, timeWindowMin: timeWindowMin, addOnly: addOnly, store: store, calendar: target, from: from, to: to)
         print(plan.summary())
         if !dryRun {
             let sync = CalendarSync(store: store)

@@ -2,13 +2,15 @@ import Foundation
 
 enum TextNormalize {
     static func norm(_ s: String) -> String {
-        let lowered = s.trimmingCharacters(in: .whitespacesAndNewlines)
+        // 1. Case/diacritic folding with deterministic locale
+        let folded = s.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "en_US_POSIX"))
+        // 2. Drop prefixes (before punctuation removal so colons are visible)
+        let prefixDropped = dropCommonPrefixes(folded)
+        // 3. Strip punctuation
+        let stripped = prefixDropped.unicodeScalars.filter { !CharacterSet.punctuationCharacters.contains($0) }.map(String.init).joined()
+        // 4. Trim ends and collapse whitespace
+        return stripped.trimmingCharacters(in: .whitespacesAndNewlines)
             .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
-            .lowercased()
-        let folded = lowered.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
-        // Strip punctuation
-        let stripped = folded.unicodeScalars.filter { !CharacterSet.punctuationCharacters.contains($0) }.map(String.init).joined()
-        return dropCommonPrefixes(stripped)
     }
 
     private static func dropCommonPrefixes(_ s: String) -> String {

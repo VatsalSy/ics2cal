@@ -45,10 +45,9 @@ else
   sudo install -m 0755 "$src" "$dest"
 fi
 
-if ! command -v ics2cal >/dev/null 2>&1; then
+if ! printf '%s\n' ":${PATH:-}:" | grep -qxF ":$dest_dir:"; then
   echo "ℹ️  Ensure $dest_dir is on your PATH. Example:"
-  echo "    export PATH=\"$dest_dir:\$PATH\"" 
+  echo "    export PATH=\"$dest_dir:\$PATH\""
 fi
 
 echo "✅ Installed: $("$dest" help | head -n 1 || echo ics2cal)"
-

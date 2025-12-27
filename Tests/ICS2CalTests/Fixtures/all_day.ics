@@ -1,0 +1,15 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//ICS2Cal Tests//EN
+BEGIN:VEVENT
+UID:allday-fixture@example.com
+DTSTAMP:20241225T120000Z
+SUMMARY:All-Day Retreat
+DTSTART;VALUE=DATE:20250120
+DTEND;VALUE=DATE:20250122
+DESCRIPTION:First line\\n second line with literal comma\\,
+  and semicolon\\; plus newline\\Nend. Path C:\\Temp
+LOCATION:Hillside Lodge\\, Room A
+ORGANIZER:CN=Support\\;Desk:mailto:support@example.com
+END:VEVENT
+END:VCALENDAR

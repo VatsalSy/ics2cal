@@ -66,8 +66,9 @@ struct CLI {
         let parser = ICSParser()
         let events = try parser.parse(fileURL: url)
         print("Found \(events.count) event(s)")
+        let iso = ISO8601DateFormatter()
         for (i, e) in events.enumerated() {
-            print("\(i+1). \(e.title) — \(ISO8601DateFormatter().string(from: e.startDate)) → \(ISO8601DateFormatter().string(from: e.endDate)) [hash=\(e.fingerprint)]")
+            print("\(i+1). \(e.title) — \(iso.string(from: e.startDate)) → \(iso.string(from: e.endDate)) [hash=\(e.fingerprint)]")
         }
     }
 
@@ -125,8 +126,8 @@ struct CLI {
         // Compute window if not provided
         let minDate = events.map { $0.startDate }.min() ?? Date()
         let maxDate = events.map { $0.endDate }.max() ?? Date()
-        let defaultFrom = Calendar.current.date(byAdding: .day, value: -30, to: minDate)!
-        let defaultTo = Calendar.current.date(byAdding: .day, value: 365, to: maxDate)!
+        let defaultFrom = Calendar.current.date(byAdding: .day, value: -30, to: minDate) ?? minDate
+        let defaultTo = Calendar.current.date(byAdding: .day, value: 365, to: maxDate) ?? maxDate
         let from = fromDate ?? defaultFrom
         let to = toDate ?? defaultTo
 
@@ -154,22 +155,31 @@ struct CLI {
         if !dryRun {
             let sync = CalendarSync(store: store)
             for add in plan.toAdd {
-                _ = try? sync.createEvent(from: add.event, in: target, sourceLabel: source)
+                do { _ = try sync.createEvent(from: add.event, in: target, sourceLabel: source) }
+                catch { fputs("Add failed: \(error)\n", stderr) }
             }
             for upd in plan.toUpdate {
                 if let ek = upd.existing {
-                    try? sync.updateEvent(ek, with: upd.new, sourceLabel: source)
+                    do { try sync.updateEvent(ek, with: upd.new, sourceLabel: source) }
+                    catch { fputs("Update (\(upd.reason)) failed: \(error)\n", stderr) }
                 }
             }
             for del in plan.toDelete {
                 switch del.action {
                 case .delete:
-                    try? sync.removeEvent(del.existing)
+                    do { try sync.removeEvent(del.existing) }
+                    catch { fputs("Delete failed: \(error)\n", stderr) }
                 case .removeSourceOnly(let newMeta):
                     del.existing.notes = MetadataNotes.encode(meta: newMeta, into: del.existing.notes)
-                    try? store.save(del.existing, span: .thisEvent, commit: true)
+                    do {
+                        try store.save(del.existing, span: .thisEvent, commit: false)
+                    } catch {
+                        fputs("Detach source failed: \(error)\n", stderr)
+                    }
                 }
             }
+            do { try sync.commitChanges() }
+            catch { fputs("Commit failed: \(error)\n", stderr) }
         }
         #else
         print("EventKit not available. Parsed \(events.count) event(s). This is a dry scaffold.")
@@ -229,9 +239,13 @@ struct SyncPlanner {
 
         for ev in events {
             // 1) UID precedence
-            if let uid = ev.uid, let match = byUID[uid] {
-                usedExisting.insert(match.eventIdentifier)
-                let needsUpdate = (match.title != ev.title) || (match.location ?? "") != (ev.location ?? "") || abs(match.startDate.timeIntervalSince(ev.startDate)) > 1 || abs(match.endDate.timeIntervalSince(ev.endDate)) > 1
+            if let uid = ev.uid, let match = byUID[uid], let id = match.eventIdentifier {
+                usedExisting.insert(id)
+                let needsUpdate = (match.title != ev.title)
+                    || (match.location ?? "") != (ev.location ?? "")
+                    || abs(match.startDate.timeIntervalSince(ev.startDate)) > 1
+                    || abs(match.endDate.timeIntervalSince(ev.endDate)) > 1
+                    || match.isAllDay != ev.isAllDay
                 var needsMeta = false
                 if let src = source, let meta = MetadataNotes.decode(from: match.notes) { needsMeta = !meta.sources.contains(src) }
                 if !addOnly && (needsUpdate || needsMeta) {
@@ -241,9 +255,14 @@ struct SyncPlanner {
             }
 
             // 2) Hash match
-            if let match = byHash[ev.fingerprint] {
-                usedExisting.insert(match.eventIdentifier)
-                let needsUpdate = (match.title != ev.title) || (match.location ?? "") != (ev.location ?? "") || abs(match.startDate.timeIntervalSince(ev.startDate)) > 1 || abs(match.endDate.timeIntervalSince(ev.endDate)) > 1
+            let legacyFingerprint = Fingerprint.legacyEventHash(title: ev.title, location: ev.location, start: ev.startDate, end: ev.endDate)
+            if let match = byHash[ev.fingerprint] ?? byHash[legacyFingerprint], let id = match.eventIdentifier {
+                usedExisting.insert(id)
+                let needsUpdate = (match.title != ev.title)
+                    || (match.location ?? "") != (ev.location ?? "")
+                    || abs(match.startDate.timeIntervalSince(ev.startDate)) > 1
+                    || abs(match.endDate.timeIntervalSince(ev.endDate)) > 1
+                    || match.isAllDay != ev.isAllDay
                 var needsMeta = false
                 if let src = source, let meta = MetadataNotes.decode(from: match.notes) { needsMeta = !meta.sources.contains(src) }
                 if !addOnly && (needsUpdate || needsMeta) {
@@ -253,22 +272,26 @@ struct SyncPlanner {
             }
 
             if adopt {
-                let candidates = allExisting.filter { !usedExisting.contains($0.eventIdentifier) }
+                let candidates = allExisting.filter { event in
+                    guard let id = event.eventIdentifier else { return false }
+                    return !usedExisting.contains(id)
+                }
                 let evTitle = norm(ev.title)
                 let evLoc = norm(ev.location)
-                var adopted: EKEvent? = nil
+                var adopted: EKEvent?
                 for cand in candidates {
                     let titleMatch = norm(cand.title) == evTitle
                     let locMatch = norm(cand.location) == evLoc || evLoc.isEmpty || norm(cand.location).isEmpty
                     let startDelta = abs(cand.startDate.timeIntervalSince(ev.startDate))
                     let durDelta = abs(cand.endDate.timeIntervalSince(ev.endDate))
-                    if titleMatch && locMatch && startDelta <= widen && durDelta <= widen {
+                    let allDayMatch = cand.isAllDay == ev.isAllDay
+                    if titleMatch && locMatch && startDelta <= widen && durDelta <= widen && allDayMatch {
                         adopted = cand
                         break
                     }
                 }
                 if let adopted {
-                    usedExisting.insert(adopted.eventIdentifier)
+                    if let id = adopted.eventIdentifier { usedExisting.insert(id) }
                     if !addOnly {
                         updates.append(UpdateItem(existing: adopted, new: ev, reason: "adopt"))
                     }
@@ -281,8 +304,14 @@ struct SyncPlanner {
 
         var deletes: [DeleteItem] = []
         if mirror, let source = source {
-            let incomingHashes = Set(events.map { $0.fingerprint })
+            var incomingHashes = Set<String>()
+            for ev in events {
+                incomingHashes.insert(ev.fingerprint)
+                incomingHashes.insert(Fingerprint.legacyEventHash(title: ev.title, location: ev.location, start: ev.startDate, end: ev.endDate))
+            }
             for e in allExisting {
+                guard let id = e.eventIdentifier else { continue }
+                if usedExisting.contains(id) { continue }
                 guard let meta = MetadataNotes.decode(from: e.notes) else { continue }
                 guard meta.sources.contains(source) else { continue }
                 if !incomingHashes.contains(meta.hash) {

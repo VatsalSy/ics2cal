@@ -5,6 +5,7 @@ struct Event {
     let title: String
     let startDate: Date
     let endDate: Date
+    let isAllDay: Bool
     let location: String?
     let description: String?
     let url: URL?
@@ -23,4 +24,3 @@ enum EventStatus: String {
     case tentative = "TENTATIVE"
     case cancelled = "CANCELLED"
 }
-

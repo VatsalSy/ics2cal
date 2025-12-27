@@ -9,8 +9,8 @@
 ## Build, Test, and Development Commands
 - Build: `swift build` — compiles all targets.
 - Run: `swift run ics2cal list` — lists calendars (triggers macOS permission).
-- Inspect: `swift run ics2cal info Tests/test.ics` — prints parsed events.
-- Sync (dry): `swift run ics2cal dry-run Tests/test.ics --calendar "MyCal"` — prints plan only.
+- Inspect: `swift run ics2cal info Tests/ICS2CalTests/Fixtures/test.ics` — prints parsed events.
+- Sync (dry): `swift run ics2cal dry-run Tests/ICS2CalTests/Fixtures/test.ics --calendar "MyCal"` — prints plan only.
 - Test: `swift test` — runs `ICS2CalTests` (XCTest) and processes `Fixtures`.
 
 ## Coding Style & Naming Conventions

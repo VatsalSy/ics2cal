@@ -1,3 +1,3 @@
-# CLAUDE.md 
+# CLAUDE.md
 
-Please read: @AGENTS.md
+Please read: [AGENTS.md](AGENTS.md)

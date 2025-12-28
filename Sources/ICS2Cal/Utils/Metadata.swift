@@ -31,7 +31,10 @@ enum MetadataNotes {
         let searchRange = rangeStart.upperBound..<notes.endIndex
         guard let rangeEnd = notes.range(of: endMarker, range: searchRange) else { return nil }
         let json = String(notes[rangeStart.upperBound..<rangeEnd.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
-        return try? JSONDecoder().decode(Meta.self, from: Data(json.utf8))
+        guard let meta = try? JSONDecoder().decode(Meta.self, from: Data(json.utf8)) else { return nil }
+        // Reject incompatible future versions to avoid misinterpreting fields
+        guard meta.v == 1 else { return nil }
+        return meta
     }
 
     static func strip(_ notes: String) -> String {

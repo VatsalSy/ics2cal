@@ -9,7 +9,7 @@ final class CalendarSync {
 
     private static let iso8601: ISO8601DateFormatter = {
         let fmt = ISO8601DateFormatter()
-        fmt.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        fmt.formatOptions = [.withInternetDateTime]
         return fmt
     }()
 

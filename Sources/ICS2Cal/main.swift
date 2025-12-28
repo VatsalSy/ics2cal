@@ -35,7 +35,8 @@ struct CLI {
         case "list":
             try cmdList(args: Array(args))
         case "sync":
-            try cmdSync(args: Array(args), dryRun: false)
+            let dryRun = args.contains("--dry-run")
+            try cmdSync(args: Array(args), dryRun: dryRun)
         case "dry-run":
             try cmdSync(args: Array(args), dryRun: true)
         default:
@@ -52,9 +53,27 @@ struct CLI {
         ics2cal — Sync ICS files to Apple Calendar
 
         Usage:
-          ics2cal info <ics-file> [--format summary|detailed|json]
-          ics2cal list [--format names|json]
-          ics2cal sync <ics-file> --calendar <name> [--source <id>] [--mirror] [--adopt-existing] [--time-window <min>] [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--add-only] [--dry-run]
+          ics2cal info <ics-file>
+          ics2cal list
+          ics2cal sync <ics-file> --calendar <name> [options]
+          ics2cal dry-run <ics-file> --calendar <name> [options]
+
+        Commands:
+          info        Parse an .ics file and print a summary of the contained events.
+          list        List available calendars.
+          sync        Synchronize events from an .ics file into the given calendar.
+          dry-run     Same as 'sync' but only reports changes without modifying calendars.
+
+        Options (sync):
+          --calendar <name>       Target calendar name to sync into (required).
+          --source <id>           Restrict to a specific calendar source identifier.
+          --mirror                Remove events from the calendar that are no longer in the .ics file.
+          --adopt-existing        Match and adopt existing events that correspond to the .ics entries.
+          --time-window <min>     Only sync events within the next <min> minutes.
+          --from YYYY-MM-DD       Only sync events starting on or after this date.
+          --to YYYY-MM-DD         Only sync events ending on or before this date.
+          --add-only              Only add new events; do not update or delete existing ones.
+          --dry-run               Show what would change without performing any modifications.
 
         """
     }
@@ -189,12 +208,16 @@ struct CLI {
 
 // MARK: - DateParser
 enum DateParser {
-    static func dateOnly(_ s: String) -> Date? {
+    private static let dateOnlyFormatter: DateFormatter = {
         let fmt = DateFormatter()
         fmt.calendar = Calendar(identifier: .gregorian)
         fmt.locale = Locale(identifier: "en_US_POSIX")
         fmt.dateFormat = "yyyy-MM-dd"
-        return fmt.date(from: s)
+        return fmt
+    }()
+
+    static func dateOnly(_ s: String) -> Date? {
+        dateOnlyFormatter.date(from: s)
     }
 }
 
@@ -226,8 +249,16 @@ struct SyncPlanner {
         for e in existing {
             allExisting.append(e)
             if let meta = MetadataNotes.decode(from: e.notes) {
+                if byHash[meta.hash] != nil {
+                    fputs("Warning: multiple events share metadata hash '\(meta.hash)'; some events may be skipped during matching.\n", stderr)
+                }
                 byHash[meta.hash] = e
-                for u in meta.uids { byUID[u] = e }
+                for u in meta.uids {
+                    if byUID[u] != nil {
+                        fputs("Warning: multiple events share metadata UID '\(u)'; some events may be skipped during matching.\n", stderr)
+                    }
+                    byUID[u] = e
+                }
             }
         }
 
@@ -283,7 +314,9 @@ struct SyncPlanner {
                     let titleMatch = norm(cand.title) == evTitle
                     let locMatch = norm(cand.location) == evLoc || evLoc.isEmpty || norm(cand.location).isEmpty
                     let startDelta = abs(cand.startDate.timeIntervalSince(ev.startDate))
-                    let durDelta = abs(cand.endDate.timeIntervalSince(ev.endDate))
+                    let candDuration = cand.endDate.timeIntervalSince(cand.startDate)
+                    let evDuration = ev.endDate.timeIntervalSince(ev.startDate)
+                    let durDelta = abs(candDuration - evDuration)
                     let allDayMatch = cand.isAllDay == ev.isAllDay
                     if titleMatch && locMatch && startDelta <= widen && durDelta <= widen && allDayMatch {
                         adopted = cand

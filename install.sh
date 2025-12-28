@@ -51,6 +51,11 @@ done
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 cd "$script_dir"
 
+if [[ ! -f "Package.swift" ]]; then
+  echo "Error: install.sh must be run from the package root (Package.swift not found)" >&2
+  exit 1
+fi
+
 if ! command -v swift >/dev/null 2>&1; then
   echo "Error: Swift toolchain not found. Please install Xcode or Swift." >&2
   exit 1
@@ -59,7 +64,7 @@ fi
 echo "🔧 Building ics2cal (release)…"
 swift build -c release
 
-src=".build/release/ics2cal"
+src="$script_dir/.build/release/ics2cal"
 if [[ ! -x "$src" ]]; then
   echo "Build succeeded but binary not found at $src" >&2
   exit 1

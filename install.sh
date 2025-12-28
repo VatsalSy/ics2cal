@@ -12,7 +12,12 @@ prefix="/usr/local"; user_install=false
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --prefix=*)
-      prefix="${1#*=}"
+      value="${1#*=}"
+      if [[ -z "$value" || "${value:0:1}" == "-" ]]; then
+        echo "Error: --prefix requires a non-empty value" >&2
+        exit 2
+      fi
+      prefix="$value"
       shift
       ;;
     --prefix)
@@ -20,7 +25,12 @@ while [[ $# -gt 0 ]]; do
         echo "Error: --prefix requires a value" >&2
         exit 2
       fi
-      prefix="$2"
+      value="$2"
+      if [[ -z "$value" || "${value:0:1}" == "-" ]]; then
+        echo "Error: --prefix requires a non-empty value" >&2
+        exit 2
+      fi
+      prefix="$value"
       shift 2
       ;;
     --user)
@@ -64,9 +74,20 @@ mkdir -p "$dest_dir"
 dest="$dest_dir/ics2cal"
 
 echo "🚚 Installing to $dest"
-if ! install -m 0755 "$src" "$dest" 2>/dev/null; then
-  echo "Elevated privileges required to write to $dest_dir"
-  sudo install -m 0755 "$src" "$dest"
+err_file=$(mktemp)
+if ! install -m 0755 "$src" "$dest" 2>"$err_file"; then
+  if grep -qi "permission denied" "$err_file"; then
+    echo "Elevated privileges required to write to $dest_dir"
+    rm -f "$err_file"
+    sudo install -m 0755 "$src" "$dest"
+  else
+    echo "Failed to install to $dest:" >&2
+    cat "$err_file" >&2
+    rm -f "$err_file"
+    exit 1
+  fi
+else
+  rm -f "$err_file"
 fi
 
 if ! printf '%s\n' ":${PATH:-}:" | grep -qF ":$dest_dir:"; then

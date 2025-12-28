@@ -212,8 +212,7 @@ final class MetadataNotesTests: XCTestCase {
         let result = MetadataNotes.strip(notes)
 
         XCTAssertTrue(result.contains("Line 1"))
-        XCTAssertTrue(result.contains("Line 2"))
-        XCTAssertTrue(result.contains("Line 4"))
+        XCTAssertTrue(result.contains("Line 2\n\nLine 4 after blank"), "Should preserve internal blank line between user notes")
     }
 
     // MARK: - Round-trip Tests

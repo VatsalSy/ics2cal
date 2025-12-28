@@ -38,14 +38,12 @@ mkdir -p "$dest_dir"
 dest="$dest_dir/ics2cal"
 
 echo "🚚 Installing to $dest"
-if install -m 0755 "$src" "$dest" 2>/dev/null; then
-  :
-else
+if ! install -m 0755 "$src" "$dest" 2>/dev/null; then
   echo "Elevated privileges required to write to $dest_dir"
   sudo install -m 0755 "$src" "$dest"
 fi
 
-if ! printf '%s\n' ":${PATH:-}:" | grep -qxF ":$dest_dir:"; then
+if ! printf '%s\n' ":${PATH:-}:" | grep -qF ":$dest_dir:"; then
   echo "ℹ️  Ensure $dest_dir is on your PATH. Example:"
   echo "    export PATH=\"$dest_dir:\$PATH\""
 fi

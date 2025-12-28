@@ -3,22 +3,48 @@ set -euo pipefail
 
 # install.sh — build and install the ics2cal CLI on macOS
 # Usage:
-#   ./install.sh                      # build release, install to /usr/local/bin
+#   ./install.sh                         # build release, install to /usr/local/bin
 #   ./install.sh --prefix /opt/homebrew  # custom prefix (installs to <prefix>/bin)
-#   ./install.sh --user               # install to $HOME/bin
+#   ./install.sh --prefix=/opt/homebrew  # same as above (= syntax supported)
+#   ./install.sh --user                  # install to $HOME/bin
 
 prefix="/usr/local"; user_install=false
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --prefix) prefix="${2:-/usr/local}"; shift 2 ;;
-    --user) user_install=true; shift ;;
-    -h|--help) echo "See script header for usage"; exit 0 ;;
-    *) echo "Unknown arg: $1" >&2; exit 2 ;;
+    --prefix=*)
+      prefix="${1#*=}"
+      shift
+      ;;
+    --prefix)
+      if [[ $# -lt 2 ]]; then
+        echo "Error: --prefix requires a value" >&2
+        exit 2
+      fi
+      prefix="$2"
+      shift 2
+      ;;
+    --user)
+      user_install=true
+      shift
+      ;;
+    -h|--help)
+      echo "See script header for usage"
+      exit 0
+      ;;
+    *)
+      echo "Unknown arg: $1" >&2
+      exit 2
+      ;;
   esac
 done
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 cd "$script_dir"
+
+if ! command -v swift >/dev/null 2>&1; then
+  echo "Error: Swift toolchain not found. Please install Xcode or Swift." >&2
+  exit 1
+fi
 
 echo "🔧 Building ics2cal (release)…"
 swift build -c release

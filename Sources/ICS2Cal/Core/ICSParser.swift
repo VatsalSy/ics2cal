@@ -2,7 +2,8 @@ import Foundation
 
 struct ICSParseOptions {
     var maxEvents: Int = 10_000
-    var maxLineLength: Int = 1_000_000  // 1MB safety limit
+    var maxLineLength: Int = 1_000_000  // 1MB safety limit per unfolded line
+    var maxContentBytes: Int = 5_000_000  // 5MB file size safety limit
 }
 
 final class ICSParser {
@@ -34,7 +35,18 @@ final class ICSParser {
     }()
 
     func parse(fileURL: URL, options: ICSParseOptions = ICSParseOptions()) throws -> [Event] {
+        if options.maxContentBytes > 0 {
+            if let resourceValues = try? fileURL.resourceValues(forKeys: [.fileSizeKey]),
+               let fileSize = resourceValues.fileSize,
+               fileSize > options.maxContentBytes {
+                throw NSError(domain: "ICS", code: 12, userInfo: [NSLocalizedDescriptionKey: "File exceeds maximum size (\(options.maxContentBytes) bytes)"])
+            }
+        }
+
         let data = try Data(contentsOf: fileURL)
+        if options.maxContentBytes > 0, data.count > options.maxContentBytes {
+            throw NSError(domain: "ICS", code: 12, userInfo: [NSLocalizedDescriptionKey: "File exceeds maximum size (\(options.maxContentBytes) bytes)"])
+        }
         let encodingsTried = ["utf8", "isoLatin1"]
         let content: String
         if let utf8 = String(data: data, encoding: .utf8) {
@@ -56,10 +68,10 @@ final class ICSParser {
             if line == "END:VEVENT" {
                 inEvent = false
                 let e = try parseVEvent(buf)
-                events.append(e)
-                if events.count >= options.maxEvents {
+                if options.maxEvents > 0, events.count >= options.maxEvents {
                     throw NSError(domain: "ICS", code: 10, userInfo: [NSLocalizedDescriptionKey: "Exceeded maximum event limit (\(options.maxEvents))"])
                 }
+                events.append(e)
                 buf = []
                 continue
             }
@@ -148,7 +160,6 @@ final class ICSParser {
         fmt.dateFormat = base.dateFormat
         fmt.locale = base.locale
         fmt.calendar = base.calendar
-        fmt.timeZone = base.timeZone
         fmt.timeZone = timeZone
         return fmt
     }
@@ -202,12 +213,58 @@ final class ICSParser {
             let paramStr = head[semi...].dropFirst()
             for p in paramStr.split(separator: ";") {
                 let kv = p.split(separator: "=", maxSplits: 1).map(String.init)
-                if kv.count == 2 { params[kv[0].uppercased()] = kv[1] }
+                if kv.count == 2 {
+                    let key = kv[0].uppercased()
+                    params[key] = normalizeParameterValue(kv[1])
+                }
             }
         } else {
             name = head.uppercased()
         }
         return (name, params, value)
+    }
+
+    private func normalizeParameterValue(_ raw: String) -> String {
+        guard !raw.isEmpty else { return raw }
+        var value = raw
+        if value.count >= 2, value.first == "\"", value.last == "\"" {
+            value = String(value.dropFirst().dropLast())
+            value = value.replacingOccurrences(of: "\"\"", with: "\"")
+            value = value.replacingOccurrences(of: "\\\"", with: "\"")
+        }
+        return decodeRFC6868Parameter(value)
+    }
+
+    private func decodeRFC6868Parameter(_ value: String) -> String {
+        guard value.contains("^") else { return value }
+        var result = String()
+        result.reserveCapacity(value.count)
+        var index = value.startIndex
+        while index < value.endIndex {
+            let ch = value[index]
+            if ch == "^" {
+                let nextIndex = value.index(after: index)
+                if nextIndex < value.endIndex {
+                    let escapeChar = value[nextIndex]
+                    switch escapeChar {
+                    case "n", "N":
+                        result.append("\n")
+                    case "'":
+                        result.append("\"")
+                    case "^":
+                        result.append("^")
+                    default:
+                        result.append("^")
+                        result.append(escapeChar)
+                    }
+                    index = value.index(after: nextIndex)
+                    continue
+                }
+            }
+            result.append(ch)
+            index = value.index(after: index)
+        }
+        return result
     }
 
     private func unescapeICSText(_ value: String) -> String {

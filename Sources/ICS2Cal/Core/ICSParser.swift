@@ -131,13 +131,26 @@ final class ICSParser {
         // Date-time or date-only with optional TZID
         let tz = tzid.flatMap { TimeZone(identifier: $0) } ?? TimeZone.current
         if value.count == 8 && value.allSatisfy({ $0.isNumber }) {
-            let fmt = ICSParser.dateOnlyFormatter.copy() as! DateFormatter
-            fmt.timeZone = tz
+            let fmt = makeFormatterCopy(from: ICSParser.dateOnlyFormatter, timeZone: tz)
             return fmt.date(from: value)
         }
-        let fmt = ICSParser.dateTimeFormatter.copy() as! DateFormatter
-        fmt.timeZone = tz
+        let fmt = makeFormatterCopy(from: ICSParser.dateTimeFormatter, timeZone: tz)
         return fmt.date(from: value)
+    }
+
+    private func makeFormatterCopy(from base: DateFormatter, timeZone: TimeZone) -> DateFormatter {
+        if let copy = base.copy() as? DateFormatter {
+            copy.timeZone = timeZone
+            return copy
+        }
+
+        let fmt = DateFormatter()
+        fmt.dateFormat = base.dateFormat
+        fmt.locale = base.locale
+        fmt.calendar = base.calendar
+        fmt.timeZone = base.timeZone
+        fmt.timeZone = timeZone
+        return fmt
     }
 
     func unfoldLines(_ content: String, maxLineLength: Int = 1_000_000) throws -> [String] {

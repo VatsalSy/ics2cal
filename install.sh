@@ -52,7 +52,7 @@ script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 cd "$script_dir"
 
 if [[ ! -f "Package.swift" ]]; then
-  echo "Error: install.sh must be run from the package root (Package.swift not found)" >&2
+  echo "Error: Package.swift not found; ensure install.sh resides in the package root (run from repo root or move the script there)" >&2
   exit 1
 fi
 

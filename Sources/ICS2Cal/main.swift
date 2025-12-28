@@ -78,6 +78,35 @@ struct CLI {
         """
     }
 
+    // MARK: - Authorization Helper
+    #if canImport(EventKit)
+    /// Request EventKit authorization and return whether access was granted.
+    /// Uses new APIs on macOS 14+/iOS 17+, falls back to old APIs on older versions.
+    private static func requestEventAccess(store: EKEventStore) -> Bool {
+        var status = EKEventStore.authorizationStatus(for: .event)
+
+        if status == .notDetermined {
+            let sem = DispatchSemaphore(value: 0)
+
+            if #available(macOS 14.0, iOS 17.0, *) {
+                store.requestFullAccessToEvents { _, _ in sem.signal() }
+            } else {
+                store.requestAccess(to: .event) { _, _ in sem.signal() }
+            }
+
+            sem.wait()
+            status = EKEventStore.authorizationStatus(for: .event)
+        }
+
+        // Check authorization status using appropriate API
+        if #available(macOS 14.0, iOS 17.0, *) {
+            return status == .fullAccess || status == .writeOnly
+        } else {
+            return status == .authorized
+        }
+    }
+    #endif
+
     // MARK: info
     static func cmdInfo(args: [String]) throws {
         guard let icsPath = args.first else { throw CLIError.usage("info requires <ics-file>") }
@@ -95,14 +124,7 @@ struct CLI {
     static func cmdList(args: [String]) throws {
         #if canImport(EventKit)
         let store = EKEventStore()
-        var status = EKEventStore.authorizationStatus(for: .event)
-        if status == .notDetermined {
-            let sem = DispatchSemaphore(value: 0)
-            store.requestAccess(to: .event) { _, _ in sem.signal() }
-            sem.wait()
-            status = EKEventStore.authorizationStatus(for: .event)
-        }
-        guard status == .authorized else {
+        guard requestEventAccess(store: store) else {
             print("Calendar access not authorized.")
             return
         }
@@ -152,14 +174,7 @@ struct CLI {
 
         #if canImport(EventKit)
         let store = EKEventStore()
-        var status = EKEventStore.authorizationStatus(for: .event)
-        if status == .notDetermined {
-            let sem = DispatchSemaphore(value: 0)
-            store.requestAccess(to: .event) { _, _ in sem.signal() }
-            sem.wait()
-            status = EKEventStore.authorizationStatus(for: .event)
-        }
-        guard status == .authorized else {
+        guard requestEventAccess(store: store) else {
             print("Calendar access not authorized. Run ics2cal list to grant.")
             return
         }

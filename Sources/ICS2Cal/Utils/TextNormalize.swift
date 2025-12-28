@@ -10,13 +10,13 @@ enum TextNormalize {
         let stripped = prefixDropped.unicodeScalars.filter { !CharacterSet.punctuationCharacters.contains($0) }.map(String.init).joined()
         // 4. Trim ends and collapse whitespace
         return stripped.trimmingCharacters(in: .whitespacesAndNewlines)
-            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
     }
 
     private static func dropCommonPrefixes(_ s: String) -> String {
         let prefixes = ["seminar:", "talk:", "lecture:"]
-        for p in prefixes {
-            if s.hasPrefix(p) { return String(s.dropFirst(p.count)).trimmingCharacters(in: .whitespaces) }
+        for p in prefixes where s.hasPrefix(p) {
+            return String(s.dropFirst(p.count)).trimmingCharacters(in: .whitespaces)
         }
         return s
     }

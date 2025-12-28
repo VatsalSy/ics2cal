@@ -95,6 +95,6 @@ if ! printf '%s\n' ":${PATH:-}:" | grep -qF ":$dest_dir:"; then
   echo "    export PATH=\"$dest_dir:\$PATH\""
 fi
 
-installed_msg=$("$dest" help 2>/dev/null | sed -n '/./{p;q;}') || true
+installed_msg=$("$dest" help 2>/dev/null | sed -n '/[^[:space:]]/{p;q;}') || true
 default_name="$(basename "$dest")"
 echo "✅ Installed: ${installed_msg:-$default_name}"

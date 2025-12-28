@@ -1,5 +1,10 @@
 import Foundation
 
+struct ICSParseOptions {
+    var maxEvents: Int = 10_000
+    var maxLineLength: Int = 1_000_000  // 1MB safety limit
+}
+
 final class ICSParser {
     private static let utcFormatter: DateFormatter = {
         let fmt = DateFormatter()
@@ -28,7 +33,7 @@ final class ICSParser {
         return fmt
     }()
 
-    func parse(fileURL: URL) throws -> [Event] {
+    func parse(fileURL: URL, options: ICSParseOptions = ICSParseOptions()) throws -> [Event] {
         let data = try Data(contentsOf: fileURL)
         let encodingsTried = ["utf8", "isoLatin1"]
         let content: String
@@ -42,7 +47,7 @@ final class ICSParser {
             info["fileURL"] = fileURL.path
             throw NSError(domain: "ICS", code: 1, userInfo: info)
         }
-        let lines = unfoldLines(content)
+        let lines = try unfoldLines(content, maxLineLength: options.maxLineLength)
         var events: [Event] = []
         var buf: [String] = []
         var inEvent = false
@@ -52,6 +57,9 @@ final class ICSParser {
                 inEvent = false
                 let e = try parseVEvent(buf)
                 events.append(e)
+                if events.count >= options.maxEvents {
+                    throw NSError(domain: "ICS", code: 10, userInfo: [NSLocalizedDescriptionKey: "Exceeded maximum event limit (\(options.maxEvents))"])
+                }
                 buf = []
                 continue
             }
@@ -121,17 +129,18 @@ final class ICSParser {
             return ICSParser.utcFormatter.date(from: value)
         }
         // Date-time or date-only with optional TZID
+        let tz = tzid.flatMap { TimeZone(identifier: $0) } ?? TimeZone.current
         if value.count == 8 && value.allSatisfy({ $0.isNumber }) {
-            let fmt = ICSParser.dateOnlyFormatter
-            fmt.timeZone = tzid.flatMap { TimeZone(identifier: $0) } ?? TimeZone.current
+            let fmt = ICSParser.dateOnlyFormatter.copy() as! DateFormatter
+            fmt.timeZone = tz
             return fmt.date(from: value)
         }
-        let fmt = ICSParser.dateTimeFormatter
-        fmt.timeZone = tzid.flatMap { TimeZone(identifier: $0) } ?? TimeZone.current
+        let fmt = ICSParser.dateTimeFormatter.copy() as! DateFormatter
+        fmt.timeZone = tz
         return fmt.date(from: value)
     }
 
-    func unfoldLines(_ content: String) -> [String] {
+    func unfoldLines(_ content: String, maxLineLength: Int = 1_000_000) throws -> [String] {
         // Normalize line endings to \n and implement RFC5545 line unfolding
         let normalized = content
             .replacingOccurrences(of: "\r\n", with: "\n")
@@ -149,11 +158,21 @@ final class ICSParser {
                     current = s
                 }
             } else {
-                if let cur = current { lines.append(cur) }
+                if let cur = current {
+                    if cur.count > maxLineLength {
+                        throw NSError(domain: "ICS", code: 11, userInfo: [NSLocalizedDescriptionKey: "Line exceeds maximum length (\(maxLineLength))"])
+                    }
+                    lines.append(cur)
+                }
                 current = s
             }
         }
-        if let cur = current { lines.append(cur) }
+        if let cur = current {
+            if cur.count > maxLineLength {
+                throw NSError(domain: "ICS", code: 11, userInfo: [NSLocalizedDescriptionKey: "Line exceeds maximum length (\(maxLineLength))"])
+            }
+            lines.append(cur)
+        }
         return lines
     }
 
@@ -179,13 +198,46 @@ final class ICSParser {
     }
 
     private func unescapeICSText(_ value: String) -> String {
-        var out = value
-        out = out.replacingOccurrences(of: "\\\\", with: "\\")
-        out = out.replacingOccurrences(of: "\\n", with: "\n")
-        out = out.replacingOccurrences(of: "\\N", with: "\n")
-        out = out.replacingOccurrences(of: "\\;", with: ";")
-        out = out.replacingOccurrences(of: "\\,", with: ",")
-        return out
+        var result = String()
+        result.reserveCapacity(value.count)
+
+        var index = value.startIndex
+        while index < value.endIndex {
+            let ch = value[index]
+
+            if ch == "\\" {
+                let nextIndex = value.index(after: index)
+                if nextIndex < value.endIndex {
+                    let next = value[nextIndex]
+                    switch next {
+                    case "n", "N":
+                        result.append("\n")
+                    case ";":
+                        result.append(";")
+                    case ",":
+                        result.append(",")
+                    case "\\":
+                        result.append("\\")
+                    default:
+                        // Unknown escape: keep backslash and following char
+                        result.append(ch)
+                        result.append(next)
+                    }
+                    index = value.index(after: nextIndex)
+                    continue
+                } else {
+                    // Trailing backslash: keep as-is
+                    result.append(ch)
+                    index = nextIndex
+                    continue
+                }
+            } else {
+                result.append(ch)
+                index = value.index(after: index)
+            }
+        }
+
+        return result
     }
 
     private func isDateOnly(value: String, params: [String: String]) -> Bool {

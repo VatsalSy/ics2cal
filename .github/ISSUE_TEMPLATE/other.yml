@@ -1,0 +1,16 @@
+name: Other
+description: Question, documentation request, or other topic
+labels: [question]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      placeholder: Briefly describe your question or request.
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+      description: Include relevant context, logs, or links.

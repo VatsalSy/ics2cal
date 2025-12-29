@@ -71,6 +71,10 @@ if [[ ! -x "$src" ]]; then
 fi
 
 if $user_install; then
+  if [[ -z "${HOME:-}" ]]; then
+    echo "Error: \$HOME is not set; cannot use --user" >&2
+    exit 1
+  fi
   dest_dir="$HOME/bin"
 else
   dest_dir="$prefix/bin"

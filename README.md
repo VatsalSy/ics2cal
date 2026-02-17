@@ -1,3 +1,7 @@
+> [!WARNING]
+> **Deprecated:** `ics2cal` is deprecated and will be archived.
+> Please use [`calcli`](https://github.com/VatsalSy/calcli) instead.
+
 # ics2cal
 
 Sync ICS (.ics) files to Apple Calendar on macOS with duplicate‑safe matching, dry runs, and optional mirror deletes.
@@ -64,4 +68,3 @@ Report vulnerabilities as described in `SECURITY.md`.
 
 ## License
 MIT — see `LICENSE` for details.
-
